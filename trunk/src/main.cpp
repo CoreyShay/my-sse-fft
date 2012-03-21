@@ -16,7 +16,7 @@ typedef complex<float> comp;
 const int SIZE = 512;
 
 vector<comp> mivec(SIZE);
-vector<vector<comp> > miMat;
+vector<vector<comp> > miMat(SIZE, vector<comp>(SIZE));
 vector<vector<comp> > kerMatf(SIZE,vector<comp>(SIZE));
 comp I(0.0, 1.0);
 comp menosDos(-2.0,0.0);
@@ -53,33 +53,49 @@ void fft(vector<comp>& vec) {
     }
 }
 
-void fft2() {
+void fft2(vector<vector<comp> >& miMat, vector<vector<float> >& m) {
+//    forn (x,SIZE/2) {
+//        forn (y,SIZE) { // Process two columns with one FFT
+//            mivec[y] = comp(m.data[y*SIZE+2*x], m.data[y*SIZE+2*x+1]);
+//        }
+//        fft(mivec);
+//        forn (y,SIZE) {
+//            miMat[y][2*x] = real(mivec[y]);
+//            miMat[y][2*x+1] = imag(mivec[y]);
+//        }
+//    }
+
     forn (x,SIZE) {
-        forn (y,SIZE)
-            mivec[y] = miMat[y][x];
+        forn (y,SIZE) {
+            mivec[y] = comp(m[y][x], 0.0);
+        }
         fft(mivec);
-        forn (y,SIZE)
+        forn (y,SIZE) {
             miMat[y][x] = mivec[y];
+        }
     }
 
     forn (y,SIZE) {
-        forn (x,SIZE)
+        forn (x,SIZE) {
             mivec[x] = miMat[y][x];
+        }
         fft(mivec);
-        forn (x,SIZE)
+        forn (x,SIZE) {
             miMat[y][x] = mivec[x];
+        }
     }
 }
 
 void ifft2() {
     I = -I;
     mivec = vector<comp>(SIZE);
+    const comp scale = comp(1.0 / float(SIZE), 0.0);
     forn (x,SIZE) {
         forn (y,SIZE)
             mivec[y] = miMat[y][x];
         fft(mivec);
         forn (y,SIZE)
-            miMat[y][x] = mivec[y] * comp(1.0 / float(SIZE), 0);
+            miMat[y][x] = mivec[y] * scale;
     }
 
     forn (y,SIZE) {
@@ -87,21 +103,27 @@ void ifft2() {
             mivec[x] = miMat[y][x];
         fft(mivec);
         forn (x,SIZE)
-            miMat[y][x] = mivec[x] * comp(1.0 / float(SIZE), 0);
+            miMat[y][x] = mivec[x] * scale;
     }
     I = -I;
 }
 
-vector<vector<comp> > embossKernel() {
-    vector<vector<comp> > res(SIZE,vector<comp>(SIZE,0));
-    res[0][0] = -2;
-    res[0][1] = -1;
-    res[1][0] = -1;
-    res[1][0] =  1;
-    res[1][0] =  1;
-    res[2][1] =  1;
-    res[2][2] =  2;
+vector<vector<float> > embossKernel() {
+    vector<vector<float> > res(SIZE,vector<float>(SIZE,0.0));
+    res[0][0] = -2.0;
+    res[0][1] = -1.0;
+    res[1][0] = -1.0;
+    res[1][1] = 1.0;
+    res[1][2] = 1.0;
+    res[2][1] = 1.0;
+    res[2][2] = 2.0;
     return res;
+}
+
+void copyMat(vector<vector<float> >& mat1, Mat& mat2) {
+    forn (y, SIZE)
+        forn (x, SIZE)
+            mat1[y][x] = mat2.data[SIZE*y+x];
 }
 
 void copyMat(vector<vector<comp> >& mat1, Mat& mat2) {
@@ -123,24 +145,26 @@ void multipCompMat(vector<vector<comp> >& mat1, vector<vector<comp> >& mat2) {
 }
 
 void embossFFT(Mat& m) {
-    Mat res(m.size(),m.type());
     Size s = m.size();
     int w = s.width, h = s.height;
 
-    miMat = embossKernel();
+    vector<vector<float> > embker = embossKernel();
 
-    fft2();
+    fft2(miMat, embker);
 
     copyMat(kerMatf, miMat);
 
-    copyMat(miMat, m);
-    fft2();
-    multipCompMat(miMat,kerMatf);
+    vector<vector<float> > mf(SIZE,vector<float>(SIZE));
+
+    copyMat(mf, m);
+
+    fft2(miMat, mf);
+    multipCompMat(miMat, kerMatf);
     ifft2();
 
     forn (y, SIZE)
         forn (x, SIZE)
-            m.data[SIZE*(SIZE-y)+(SIZE-x)] = (unsigned char)(min(255,max(0,int(real(miMat[y][x])))));
+            m.data[SIZE*(SIZE-y)+(SIZE-x)] = (unsigned char)(min(255, max(0, int(real(miMat[y][x])))));
 }
 
 int main()
@@ -149,7 +173,7 @@ int main()
 
     Mat im1 = imread("imgs/lena.bmp", 0);
 
-    Mat imagen = im1(Range(0,SIZE),Range(0,SIZE));
+    Mat imagen = im1(Range(0,SIZE), Range(0,SIZE));
 
     embossFFT(imagen);
 
