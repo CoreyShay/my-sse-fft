@@ -12,6 +12,8 @@
 				<Option type="1" />
 				<Option compiler="gcc" />
 				<Compiler>
+					<Add option="-pedantic-errors" />
+					<Add option="-Wall" />
 					<Add option="-g" />
 					<Add directory="/usr/include/opencv" />
 				</Compiler>
@@ -26,10 +28,15 @@
 				<Option type="1" />
 				<Option compiler="gcc" />
 				<Compiler>
+					<Add option="-march=prescott" />
+					<Add option="-fexpensive-optimizations" />
 					<Add option="-O2" />
+					<Add directory="/usr/include/opencv" />
 				</Compiler>
 				<Linker>
 					<Add option="-s" />
+					<Add option="-lhighgui -lcv" />
+					<Add directory="/usr/lib" />
 				</Linker>
 			</Target>
 		</Build>
