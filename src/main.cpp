@@ -141,12 +141,6 @@ void embossFFT(Mat& m) {
     Size s = m.size();
     int w = s.width, h = s.height;
 
-    vector<vector<float> > embker = embossKernel();
-
-    fft2(miMat, embker);
-
-    copyMat(kerMatf, miMat);
-
     vector<vector<float> > mf(SIZE,vector<float>(SIZE));
 
     copyMat(mf, m);
@@ -162,27 +156,28 @@ void embossFFT(Mat& m) {
 
 int main()
 {
-    namedWindow("tp", 0);
+    namedWindow("video", 0);
 
-    Mat im1 = imread("imgs/lena.bmp", 0);
+    //Mat im1 = imread("imgs/lena.bmp", 0);
+    VideoCapture capCamera;
+    Mat camFrame;
+    Mat frame;
+    Mat frame2(SIZE,SIZE,CV_8UC1);
 
-    Mat imagen = im1(Range(0,SIZE), Range(0,SIZE));
+    vector<vector<float> > embker = embossKernel();
+    fft2(miMat, embker);
+    copyMat(kerMatf, miMat);
 
-    embossFFT(imagen);
+    capCamera.open(0);
+    capCamera >> camFrame;
 
-    imshow("tp", imagen);
-
-    waitKey();
-//
-//    forn (i,16)
-//        vec[usando][i] = i;
-//
-//    fft(0,16);
-//
-//    forn (i,16)
-//        cout << vec[1-usando][i] << " ";
-//
-//    cout << endl;
+    for (;;) {
+        capCamera >> camFrame; if(!camFrame.data) break;
+        cvtColor(camFrame, frame, CV_RGB2GRAY);
+        resize(frame, frame2, Size(SIZE,SIZE), 0, 0, INTER_LINEAR);
+        embossFFT(frame2);
+        imshow("video", frame2); if(waitKey(30) >= 0) break;
+    }
 
     return 0;
 }
