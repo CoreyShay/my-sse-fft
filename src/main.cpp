@@ -14,26 +14,37 @@ using namespace std;
 typedef complex<float> comp;
 
 const int SIZE = 512;
+const double pi = 3.141592653589793;
 
 vector<vector<comp> > vec(2, vector<comp>(SIZE));
 int usando = 1;
 vector<vector<comp> > miMat(SIZE, vector<comp>(SIZE));
-vector<vector<comp> > kerMatf(SIZE,vector<comp>(SIZE));
+vector<vector<comp> > kernelF(SIZE,vector<comp>(SIZE)); // kernel in the frequency domain
 comp I(0.0, 1.0);
 comp menosDos(-2.0,0.0);
-comp PI(3.141592653589793,0.0);
+comp PI(pi,0.0);
 
-vector<vector<bool> > calculado(SIZE+30,vector<bool>(SIZE+30,false));
-vector<vector<comp> > valor(SIZE+30, vector<comp>(SIZE+30));
+vector<vector<vector<comp> > > T(2, vector<vector<comp> >(SIZE+100,vector<comp>(SIZE+100)));
 
-inline comp T(int N, int k) {
-    if (calculado[N][k])
-        return valor[N][k];
-    calculado[N][k] = true;
-    return valor[N][k] = exp(I * menosDos * PI * comp(k,0.0) / comp(N,0.0));
+void precalculateTwiddleFactors() {
+    int N = SIZE;
+    while (N > 1) {
+        int N2 = N / 2;
+        forn (k,N2) {
+            T[0][N][k] = exp(I * menosDos * PI * comp(k,0.0) / comp(N,0.0));
+            I = -I;
+            T[1][N][k] = exp(I * menosDos * PI * comp(k,0.0) / comp(N,0.0));
+            I = -I;
+        }
+        N = N2;
+    }
 }
 
-void fft(int base, int N) {
+inline comp Tf(int N, int k) {
+    return exp(I * menosDos * PI * comp(k,0.0) / comp(N,0.0));
+}
+
+void fft(int base, int N, int inv) {
     if (N==1)
         return;
     int N2 = N / 2;
@@ -42,12 +53,12 @@ void fft(int base, int N) {
         vec[1-usando][base+N2+i] = vec[usando][base+2*i+1];
     }
     usando = 1 - usando;
-    fft(base, N2);
-    fft(base+N2, N2);
+    fft(base, N2, inv);
+    fft(base+N2, N2, inv);
 
     forn (i,N2) { // "Butterfly"
         comp top = vec[1-usando][base+i];
-        comp bot = vec[1-usando][base+N2+i] * T(N, i);
+        comp bot = vec[1-usando][base+N2+i] * T[inv][N][i];
         vec[usando][base+i] = top + bot;
         vec[usando][base+N2+i] = top - bot;
     }
@@ -59,7 +70,7 @@ void fft2(vector<vector<comp> >& miMat, vector<vector<float> >& m) {
         forn (y,SIZE) {
             vec[usando][y] = comp(m[y][x], 0.0);
         }
-        fft(0,SIZE);
+        fft(0,SIZE,0);
         usando = 1-usando;
         forn (y,SIZE) {
             miMat[y][x] = vec[usando][y];
@@ -70,7 +81,7 @@ void fft2(vector<vector<comp> >& miMat, vector<vector<float> >& m) {
         forn (x,SIZE) {
             vec[usando][x] = miMat[y][x];
         }
-        fft(0,SIZE);
+        fft(0,SIZE,0);
         usando = 1 - usando;
         forn (x,SIZE) {
             miMat[y][x] = vec[usando][x];
@@ -79,12 +90,11 @@ void fft2(vector<vector<comp> >& miMat, vector<vector<float> >& m) {
 }
 
 void ifft2() {
-    I = -I;
     const comp scale = comp(1.0 / float(SIZE), 0.0);
     forn (x,SIZE) {
         forn (y,SIZE)
             vec[usando][y] = miMat[y][x];
-        fft(0,SIZE);
+        fft(0,SIZE,1);
         usando = 1 - usando;
         forn (y,SIZE)
             miMat[y][x] = vec[usando][y] * scale;
@@ -93,24 +103,11 @@ void ifft2() {
     forn (y,SIZE) {
         forn (x,SIZE)
             vec[usando][x] = miMat[y][x];
-        fft(0,SIZE);
-        usando = 1- usando;
+        fft(0,SIZE,1);
+        usando = 1 - usando;
         forn (x,SIZE)
             miMat[y][x] = vec[usando][x] * scale;
     }
-    I = -I;
-}
-
-vector<vector<float> > embossKernel() {
-    vector<vector<float> > res(SIZE,vector<float>(SIZE,0.0));
-    res[0][0] = -2.0;
-    res[0][1] = -1.0;
-    res[1][0] = -1.0;
-    res[1][1] = 1.0;
-    res[1][2] = 1.0;
-    res[2][1] = 1.0;
-    res[2][2] = 2.0;
-    return res;
 }
 
 void copyMat(vector<vector<float> >& mat1, Mat& mat2) {
@@ -146,30 +143,51 @@ void embossFFT(Mat& m) {
     copyMat(mf, m);
 
     fft2(miMat, mf);
-    multipCompMat(miMat, kerMatf);
+    multipCompMat(miMat, kernelF);
     ifft2();
 
-    forn (y, SIZE)
+    forn (y, SIZE) {
         forn (x, SIZE)
-            m.data[SIZE*(SIZE-y)+(SIZE-x)] = (unsigned char)(min(255, max(0, int(real(miMat[y][x])))));
+            m.data[SIZE*y+x] = (unsigned char)(min(255, max(0, int(real(miMat[y][x])))));
+    }
+}
+
+int kernelSize = 5;
+
+void recalculateGaussianKernel(int k, void* v) {
+    vector<vector<float> > gauss(SIZE, vector<float>(SIZE,0.0));
+    double scale = 1.0 / (2.0 * pi * kernelSize * kernelSize);
+    double total = 0.0;
+    forn(y,SIZE) {
+        forn (x,SIZE) {
+            gauss[y][x] = exp(-((x*x+y*y)/(2.0*kernelSize*kernelSize)));
+            total += gauss[y][x];
+        }
+    }
+    forn(y,SIZE) { // normalizamos para que el nivel de brillo no decaiga
+        forn (x,SIZE) {
+            gauss[y][x] /= total;
+        }
+    }
+
+    fft2(miMat, gauss);
+    copyMat(kernelF, miMat);
 }
 
 int main()
 {
-    namedWindow("video", 0);
+    precalculateTwiddleFactors();
+    recalculateGaussianKernel(0,0);
 
-    //Mat im1 = imread("imgs/lena.bmp", 0);
+    namedWindow("video", 0);
+    createTrackbar("sigma", "video", &kernelSize, 200, &recalculateGaussianKernel);
+
     VideoCapture capCamera;
     Mat camFrame;
     Mat frame;
     Mat frame2(SIZE,SIZE,CV_8UC1);
 
-    vector<vector<float> > embker = embossKernel();
-    fft2(miMat, embker);
-    copyMat(kerMatf, miMat);
-
     capCamera.open(0);
-    capCamera >> camFrame;
 
     for (;;) {
         capCamera >> camFrame; if(!camFrame.data) break;
