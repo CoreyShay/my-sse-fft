@@ -15,7 +15,8 @@ typedef complex<float> comp;
 
 const int SIZE = 512;
 
-vector<comp> mivec(SIZE);
+vector<vector<comp> > vec(2, vector<comp>(SIZE));
+int usando = 1;
 vector<vector<comp> > miMat(SIZE, vector<comp>(SIZE));
 vector<vector<comp> > kerMatf(SIZE,vector<comp>(SIZE));
 comp I(0.0, 1.0);
@@ -32,78 +33,70 @@ inline comp T(int N, int k) {
     return valor[N][k] = exp(I * menosDos * PI * comp(k,0.0) / comp(N,0.0));
 }
 
-void fft(vector<comp>& vec) {
-    int N = vec.size();
+void fft(int base, int N) {
     if (N==1)
         return;
     int N2 = N / 2;
-    vector<comp> vEven(N2), vOdd(N2);
     forn (i,N2) {
-        vEven[i] = vec[2*i];
-        vOdd[i] = vec[2*i+1];
+        vec[1-usando][base+i] = vec[usando][base+2*i];
+        vec[1-usando][base+N2+i] = vec[usando][base+2*i+1];
     }
-    fft(vEven);
-    fft(vOdd);
+    usando = 1 - usando;
+    fft(base, N2);
+    fft(base+N2, N2);
 
-    forn (k,N2) { // "Butterfly"
-        comp top = vEven[k];
-        comp bot = vOdd[k] * T(N, k);
-        vec[k] = top + bot;
-        vec[N2+k] = top - bot;
+    forn (i,N2) { // "Butterfly"
+        comp top = vec[1-usando][base+i];
+        comp bot = vec[1-usando][base+N2+i] * T(N, i);
+        vec[usando][base+i] = top + bot;
+        vec[usando][base+N2+i] = top - bot;
     }
+    usando = 1 - usando;
 }
 
 void fft2(vector<vector<comp> >& miMat, vector<vector<float> >& m) {
-//    forn (x,SIZE/2) {
-//        forn (y,SIZE) { // Process two columns with one FFT
-//            mivec[y] = comp(m.data[y*SIZE+2*x], m.data[y*SIZE+2*x+1]);
-//        }
-//        fft(mivec);
-//        forn (y,SIZE) {
-//            miMat[y][2*x] = real(mivec[y]);
-//            miMat[y][2*x+1] = imag(mivec[y]);
-//        }
-//    }
-
     forn (x,SIZE) {
         forn (y,SIZE) {
-            mivec[y] = comp(m[y][x], 0.0);
+            vec[usando][y] = comp(m[y][x], 0.0);
         }
-        fft(mivec);
+        fft(0,SIZE);
+        usando = 1-usando;
         forn (y,SIZE) {
-            miMat[y][x] = mivec[y];
+            miMat[y][x] = vec[usando][y];
         }
     }
 
     forn (y,SIZE) {
         forn (x,SIZE) {
-            mivec[x] = miMat[y][x];
+            vec[usando][x] = miMat[y][x];
         }
-        fft(mivec);
+        fft(0,SIZE);
+        usando = 1 - usando;
         forn (x,SIZE) {
-            miMat[y][x] = mivec[x];
+            miMat[y][x] = vec[usando][x];
         }
     }
 }
 
 void ifft2() {
     I = -I;
-    mivec = vector<comp>(SIZE);
     const comp scale = comp(1.0 / float(SIZE), 0.0);
     forn (x,SIZE) {
         forn (y,SIZE)
-            mivec[y] = miMat[y][x];
-        fft(mivec);
+            vec[usando][y] = miMat[y][x];
+        fft(0,SIZE);
+        usando = 1 - usando;
         forn (y,SIZE)
-            miMat[y][x] = mivec[y] * scale;
+            miMat[y][x] = vec[usando][y] * scale;
     }
 
     forn (y,SIZE) {
         forn (x,SIZE)
-            mivec[x] = miMat[y][x];
-        fft(mivec);
+            vec[usando][x] = miMat[y][x];
+        fft(0,SIZE);
+        usando = 1- usando;
         forn (x,SIZE)
-            miMat[y][x] = mivec[x] * scale;
+            miMat[y][x] = vec[usando][x] * scale;
     }
     I = -I;
 }
@@ -180,6 +173,16 @@ int main()
     imshow("tp", imagen);
 
     waitKey();
+//
+//    forn (i,16)
+//        vec[usando][i] = i;
+//
+//    fft(0,16);
+//
+//    forn (i,16)
+//        cout << vec[1-usando][i] << " ";
+//
+//    cout << endl;
 
     return 0;
 }
