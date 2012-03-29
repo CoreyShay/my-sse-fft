@@ -21,7 +21,7 @@ int usando = 1;
 vector<vector<comp> > vec(2, vector<comp>(SIZE));
 vector<vector<comp> > miMat(SIZE, vector<comp>(SIZE));
 vector<vector<comp> > kernelF(SIZE,vector<comp>(SIZE)); // kernel in the frequency domain
-vector<vector<vector<comp> > > T(2, vector<vector<comp> >(SIZE+100,vector<comp>(SIZE+100)));
+vector<vector<vector<comp> > > T(2, vector<vector<comp> >(SIZE+10,vector<comp>(SIZE+10)));
 
 void precalculateTwiddleFactors() {
     comp I(0.0, 1.0), menosDos(-2.0,0.0), PI(pi,0.0);
@@ -138,17 +138,15 @@ void multipCompMat(vector<vector<comp> >& mat1, vector<vector<comp> >& mat2) {
 void conv2d(Mat& m) {
     vector<vector<comp> > mf(SIZE,vector<comp>(SIZE));
 
-    copyMatInterc(mf, m);
+    copyMat(mf, m);
 
     fft2(miMat, mf);
     multipCompMat(miMat, kernelF);
     ifft2();
 
-    int N2 = SIZE/2;
-    forn (y, N2) {
+    forn (y, SIZE) {
         forn (x, SIZE) {
             m.data[SIZE*y+x] = (unsigned char)(min(255, max(0, int(real(miMat[y][x])))));
-            m.data[SIZE*(y+N2)+x] = (unsigned char)(min(255, max(0, int(imag(miMat[y][x])))));
         }
     }
 }
